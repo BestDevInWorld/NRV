@@ -1,0 +1,428 @@
+"use strict";
+
+/**
+ * Paste your Google Sheets JSON URL here.
+ *
+ * The URL should return an array of rows like:
+ * [
+ *   {
+ *     "id": "1",
+ *     "productName": "Protein Bar",
+ *     "image": "https://example.com/image.png",
+ *     "description": "Tasty bar",
+ *     "flavor": "Chocolate",
+ *     "available": "TRUE",
+ *     "price": "50"
+ *   },
+ *   ...
+ * ]
+ *
+ * Many Google Sheets → JSON services produce exactly this structure.
+ * If your JSON is wrapped in an object (for example: { data: [...] }),
+ * you can adjust the `extractRows` function below.
+ */
+const GOOGLE_SHEETS_JSON_URL = "https://script.google.com/macros/s/AKfycbzHOZRRKQ5jjwVgASdnFdpBJDA5xdaov3mRpiU3XvPOIw84RV8S0iPvMQKXJQsZyq5ZgA/exec";
+
+/**
+ * Telegram group link for the "Order" button.
+ * Replace ONLY the part after https://t.me/
+ */
+const TELEGRAM_GROUP_URL = "https://web.telegram.org/a/#-1003846981111";
+
+// Cached DOM elements
+const productGridEl = document.getElementById("product-grid");
+const loadingEl = document.getElementById("loading");
+const errorEl = document.getElementById("error");
+
+const modalOverlayEl = document.getElementById("modal-overlay");
+const modalImageEl = document.getElementById("modal-image");
+const modalTitleEl = document.getElementById("modal-title");
+const modalDescriptionEl = document.getElementById("modal-description");
+const modalPriceEl = document.getElementById("modal-price");
+const flavorListEl = document.getElementById("flavor-list");
+const orderButtonEl = document.getElementById("order-button");
+const modalCloseButtonEl = document.querySelector(".modal-close");
+
+let currentProduct = null;
+let currentFlavor = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  void loadProducts();
+  setupModalEvents();
+});
+
+/**
+ * Fetches product rows from Google Sheets and renders the catalog.
+ */
+async function loadProducts() {
+  showLoading(true);
+  showError("");
+  productGridEl.hidden = true;
+
+  try {
+    if (!GOOGLE_SHEETS_JSON_URL || GOOGLE_SHEETS_JSON_URL.startsWith("PASTE_")) {
+      throw new Error(
+        "Please set your Google Sheets JSON URL in script.js (GOOGLE_SHEETS_JSON_URL)."
+      );
+    }
+
+    const response = await fetch(GOOGLE_SHEETS_JSON_URL, {
+      headers: {
+        // Helpful for some APIs that prefer JSON
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load data (${response.status} ${response.statusText})`
+      );
+    }
+
+    const json = await response.json();
+    const rows = extractRows(json);
+
+    const products = groupProductsById(rows);
+
+    if (!products.length) {
+      showError("No available products were found in the sheet.");
+      return;
+    }
+
+    renderProductGrid(products);
+  } catch (error) {
+    console.error(error);
+    showError(
+      error instanceof Error
+        ? error.message
+        : "An unexpected error occurred while loading products."
+    );
+  } finally {
+    showLoading(false);
+  }
+}
+
+/**
+ * Returns an array of raw row objects from the API response.
+ * Adjust this if your JSON is wrapped differently.
+ */
+function extractRows(json) {
+  if (Array.isArray(json)) {
+    return json;
+  }
+
+  // Common pattern: { data: [...] }
+  if (json && Array.isArray(json.data)) {
+    return json.data;
+  }
+
+  // Fallback: try "values" if using some Google APIs
+  if (json && Array.isArray(json.values)) {
+    return json.values;
+  }
+
+  console.warn(
+    "Could not automatically detect rows array. Returning empty list."
+  );
+  return [];
+}
+
+/**
+ * Groups flat rows from the sheet into product objects by `id`,
+ * keeping only entries where available == TRUE.
+ */
+function groupProductsById(rows) {
+  const map = new Map();
+
+  for (const raw of rows) {
+    if (!raw) continue;
+
+    const id = String(raw.id ?? "").trim();
+    if (!id) continue;
+
+    const availableRaw = String(raw.available ?? "").toLowerCase().trim();
+    const isAvailable = availableRaw === "true" || availableRaw === "yes";
+    if (!isAvailable) continue;
+
+    const name = String(raw.productName ?? "").trim();
+    const image = String(raw.image ?? "").trim();
+    const description = String(raw.description ?? "").trim();
+    const flavor = String(raw.flavor ?? "").trim();
+    const price = String(raw.price ?? "").trim();
+
+    if (!map.has(id)) {
+      map.set(id, {
+        id,
+        name: name || "Unnamed product",
+        image,
+        description,
+        price,
+        flavors: [],
+      });
+    }
+
+    const product = map.get(id);
+
+    if (flavor && !product.flavors.includes(flavor)) {
+      product.flavors.push(flavor);
+    }
+  }
+
+  // Sort flavors alphabetically for nicer UX
+  const products = Array.from(map.values());
+  for (const product of products) {
+    product.flavors.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }
+
+  // Optional: sort products by id or name
+  products.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+  return products;
+}
+
+/**
+ * Renders the product cards grid.
+ */
+function renderProductGrid(products) {
+  productGridEl.innerHTML = "";
+
+  for (const product of products) {
+    const card = document.createElement("article");
+    card.className = "product-card";
+
+    const imageWrapper = document.createElement("div");
+    imageWrapper.className = "product-image-wrapper";
+
+    const img = document.createElement("img");
+    img.className = "product-image";
+    img.alt = product.name;
+    img.src = product.image || getPlaceholderImage();
+
+    imageWrapper.appendChild(img);
+
+    const body = document.createElement("div");
+    body.className = "product-body";
+
+    const nameEl = document.createElement("h2");
+    nameEl.className = "product-name";
+    nameEl.textContent = product.name;
+
+    const descEl = document.createElement("p");
+    descEl.className = "product-description";
+    descEl.textContent =
+      product.description || "No description available for this product.";
+
+    const metaEl = document.createElement("div");
+    metaEl.className = "product-meta";
+
+    const priceEl = document.createElement("div");
+    priceEl.className = "product-price";
+    priceEl.textContent = product.price ? `${product.price}` : "Price on request";
+
+    metaEl.appendChild(priceEl);
+
+    const actionsEl = document.createElement("div");
+    actionsEl.className = "product-actions";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-button";
+    button.innerHTML = '<span>View flavors</span><span class="icon">➜</span>';
+
+    // Clicking "View flavors" opens the modal for this product
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openProductModal(product);
+    });
+
+    actionsEl.appendChild(button);
+
+    body.appendChild(nameEl);
+    body.appendChild(descEl);
+    body.appendChild(metaEl);
+    body.appendChild(actionsEl);
+
+    card.appendChild(imageWrapper);
+    card.appendChild(body);
+
+    // Optional: also open on card click (desktop)
+    card.addEventListener("click", () => {
+      openProductModal(product);
+    });
+
+    productGridEl.appendChild(card);
+  }
+
+  productGridEl.hidden = false;
+}
+
+/**
+ * Sets up shared modal event listeners.
+ */
+function setupModalEvents() {
+  if (!modalOverlayEl) return;
+
+  modalOverlayEl.addEventListener("click", (event) => {
+    if (event.target === modalOverlayEl) {
+      closeModal();
+    }
+  });
+
+  if (modalCloseButtonEl) {
+    modalCloseButtonEl.addEventListener("click", () => {
+      closeModal();
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modalOverlayEl.hidden) {
+      closeModal();
+    }
+  });
+
+  if (orderButtonEl) {
+    orderButtonEl.addEventListener("click", () => {
+      handleOrderClick();
+    });
+  }
+}
+
+/**
+ * Opens the modal and fills in product + flavors.
+ */
+function openProductModal(product) {
+  currentProduct = product;
+  currentFlavor = null;
+
+  modalTitleEl.textContent = product.name;
+  modalDescriptionEl.textContent =
+    product.description || "No description available.";
+  modalPriceEl.textContent = product.price || "Price on request";
+
+  modalImageEl.src = product.image || getPlaceholderImage();
+  modalImageEl.alt = product.name;
+
+  renderFlavors(product.flavors);
+
+  modalOverlayEl.hidden = false;
+  modalOverlayEl.classList.add("is-open");
+}
+
+/**
+ * Closes the product modal.
+ */
+function closeModal() {
+  modalOverlayEl.classList.remove("is-open");
+  modalOverlayEl.hidden = true;
+  currentProduct = null;
+  currentFlavor = null;
+}
+
+/**
+ * Renders the flavor pills and manages selection.
+ */
+function renderFlavors(flavors) {
+  flavorListEl.innerHTML = "";
+
+  if (!flavors || !flavors.length) {
+    const noneEl = document.createElement("p");
+    noneEl.textContent = "No flavors are currently available.";
+    noneEl.style.fontSize = "0.9rem";
+    noneEl.style.color = "#6b7280";
+    flavorListEl.appendChild(noneEl);
+    return;
+  }
+
+  flavors.forEach((flavor, index) => {
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "flavor-pill";
+    pill.textContent = flavor;
+
+    if (index === 0) {
+      pill.classList.add("selected");
+      currentFlavor = flavor;
+    }
+
+    pill.addEventListener("click", () => {
+      currentFlavor = flavor;
+      updateSelectedFlavorPill(pill);
+    });
+
+    flavorListEl.appendChild(pill);
+  });
+}
+
+/**
+ * Updates styles when a flavor is selected.
+ */
+function updateSelectedFlavorPill(selectedPill) {
+  const pills = flavorListEl.querySelectorAll(".flavor-pill");
+  pills.forEach((pill) => {
+    if (pill === selectedPill) {
+      pill.classList.add("selected");
+    } else {
+      pill.classList.remove("selected");
+    }
+  });
+}
+
+/**
+ * Handles clicking the "Order" button.
+ * Redirects to Telegram. You can extend this to pass product/flavor info.
+ */
+function handleOrderClick() {
+  if (!TELEGRAM_GROUP_URL || TELEGRAM_GROUP_URL.includes("YOUR_GROUP_LINK")) {
+    alert(
+      "Please set your Telegram group URL in script.js (TELEGRAM_GROUP_URL)."
+    );
+    return;
+  }
+
+  // Optional: attach product & flavor info as query parameters
+  const params = new URLSearchParams();
+  if (currentProduct) {
+    params.set("product", currentProduct.name);
+  }
+  if (currentFlavor) {
+    params.set("flavor", currentFlavor);
+  }
+
+  const separator = TELEGRAM_GROUP_URL.includes("?") ? "&" : "?";
+  const redirectUrl =
+    TELEGRAM_GROUP_URL + separator + params.toString();
+
+  window.location.href = redirectUrl;
+}
+
+/**
+ * Toggles the loading indicator.
+ */
+function showLoading(isLoading) {
+  if (!loadingEl) return;
+  loadingEl.style.display = isLoading ? "flex" : "none";
+}
+
+/**
+ * Displays an error message area.
+ */
+function showError(message) {
+  if (!errorEl) return;
+
+  if (!message) {
+    errorEl.hidden = true;
+    errorEl.textContent = "";
+    return;
+  }
+
+  errorEl.hidden = false;
+  errorEl.textContent = message;
+}
+
+/**
+ * Simple placeholder image when no image URL is provided.
+ */
+function getPlaceholderImage() {
+  return "https://via.placeholder.com/600x400.png?text=No+Image";
+}
+

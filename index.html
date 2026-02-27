@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Каталог товарів</title>
+
+    <!-- Modern, clean font -->
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="script.js"></script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="site-header">
+        <div class="container">
+          <div class="branding">
+            <div class="logo-circle">P</div>
+            <div class="brand-text">
+              <h1 class="site-title">Каталог товарів</h1>
+              <p class="site-subtitle">Lightweight, fast & easy</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="site-main">
+        <section class="catalog-section">
+          <div class="container">
+            <div id="loading" class="loading">
+              <div class="spinner"></div>
+              <p>Завантаження продуктів...</p>
+            </div>
+
+            <div id="error" class="error-message" hidden></div>
+
+            <div id="product-grid" class="product-grid" hidden></div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="container">
+          <p class="footer-text">
+            Edit products directly in your Google Sheet. The website updates
+            automatically.
+          </p>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Product modal -->
+    <div id="modal-overlay" class="modal-overlay" hidden>
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+      >
+        <button
+          type="button"
+          class="modal-close"
+          aria-label="Close product details"
+        >
+          &times;
+        </button>
+
+        <div class="modal-content">
+          <div class="modal-header">
+            <img
+              id="modal-image"
+              class="modal-image"
+              src=""
+              alt="Product image"
+            />
+            <div class="modal-header-text">
+              <h2 id="modal-title" class="modal-title"></h2>
+              <p id="modal-description" class="modal-description"></p>
+            </div>
+          </div>
+
+          <div class="modal-body">
+            <h3 class="flavors-title">Смаки в наявності</h3>
+            <div id="flavor-list" class="flavor-list"></div>
+          </div>
+
+          <div class="modal-footer">
+            <div class="modal-price">
+              <span class="price-label">Ціна</span>
+              <span id="modal-price" class="price-value"></span>
+            </div>
+            <button id="order-button" type="button" class="primary-button">
+              перейти до замовлення
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+
