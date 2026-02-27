@@ -27,7 +27,7 @@ const GOOGLE_SHEETS_JSON_URL = "https://script.google.com/macros/s/AKfycbzHOZRRK
  * Telegram group link for the "Order" button.
  * Replace ONLY the part after https://t.me/
  */
-const TELEGRAM_GROUP_URL = "https://web.telegram.org/a/#-1003846981111";
+const TELEGRAM_GROUP_URL = "https://t.me/Tsalaiko?text=";
 
 // Cached DOM elements
 const productGridEl = document.getElementById("product-grid");
@@ -227,7 +227,7 @@ function renderProductGrid(products) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "secondary-button";
-    button.innerHTML = '<span>View flavors</span><span class="icon">➜</span>';
+    button.innerHTML = '<span>Більше</span><span class="icon">➜</span>';
 
     // Clicking "View flavors" opens the modal for this product
     button.addEventListener("click", (event) => {
@@ -379,20 +379,28 @@ function handleOrderClick() {
     return;
   }
 
-  // Optional: attach product & flavor info as query parameters
-  const params = new URLSearchParams();
-  if (currentProduct) {
-    params.set("product", currentProduct.name);
-  }
-  if (currentFlavor) {
-    params.set("flavor", currentFlavor);
-  }
+// Формуємо повідомлення для Telegram
+let message = "Привіт! Я хочу замовити ";
 
-  const separator = TELEGRAM_GROUP_URL.includes("?") ? "&" : "?";
-  const redirectUrl =
-    TELEGRAM_GROUP_URL + separator + params.toString();
+if (currentProduct) {
+    message += currentProduct.name;
+}
 
-  window.location.href = redirectUrl;
+if (currentFlavor) {
+    message += currentFlavor ? ` зі смаком ${currentFlavor}` : "";
+}
+
+message += ".";
+
+// Кодуємо текст для URL
+const encodedMessage = encodeURIComponent(message);
+
+// Формуємо повне посилання
+const separator = TELEGRAM_GROUP_URL.includes("?") ? "&" : "?";
+const redirectUrl = `${TELEGRAM_GROUP_URL}${separator}text=${encodedMessage}`;
+
+// Переходимо за посиланням
+window.location.href = redirectUrl;
 }
 
 /**
