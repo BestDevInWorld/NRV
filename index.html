@@ -22,17 +22,39 @@
 
     <link rel="stylesheet" href="style.css" />
     <script defer src="script.js"></script>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-E33VE2DZMH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-E33VE2DZMH');
+    </script>
+
+    <meta charset="UTF-8">
+    <title>Мій сайт</title>
   </head>
   <body>
     <div class="page">
       <header class="site-header">
         <div class="container">
-          <div class="branding">
-            <div class="logo-circle">NRV</div>
-            <div class="brand-text">
-              <h1 class="site-title">NRV Smoke</h1>
-              <p class="site-subtitle">Каталог товарів</p>
+          <div class="header-bar">
+            <div class="branding">
+              <div class="logo-circle">
+                <img src="Logo.jpg" alt="SmokeCloud" class="logo-image" />
+              </div>
+              <div class="brand-text">
+                <h1 class="site-title">SmokeCloud</h1>
+                <p class="site-subtitle">Каталог товарів</p>
+              </div>
             </div>
+
+            <button id="cart-button" type="button" class="cart-button" aria-label="Відкрити корзину">
+              <span class="cart-icon">🛒</span>
+              <span id="cart-count" class="cart-count">0</span>
+            </button>
           </div>
         </div>
       </header>
@@ -102,10 +124,46 @@
               <span class="price-label">Ціна</span>
               <span id="modal-price" class="price-value"></span>
             </div>
-            <button id="order-button" type="button" class="primary-button">
-              перейти до замовлення
+            <button id="order-button" type="button" class="primary-button" onclick="trackClick('add_to_cart')">
+              додати в корзину
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cart sidebar -->
+    <div id="cart-overlay" class="cart-overlay" hidden>
+      <div class="cart" role="dialog" aria-modal="true" aria-labelledby="cart-title">
+        <div class="cart-header">
+          <h2 id="cart-title" class="cart-title">Корзина</h2>
+          <button
+            id="cart-close"
+            type="button"
+            class="cart-close"
+            aria-label="Закрити корзину"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div id="cart-items" class="cart-items">
+          <!-- Cart items will be rendered here -->
+        </div>
+
+        <div class="cart-footer">
+          <div class="cart-total">
+            <span>Разом:</span>
+            <span id="cart-total-value" class="cart-total-value">0</span>
+          </div>
+          <button
+            id="cart-checkout"
+            type="button"
+            class="primary-button cart-checkout-button"
+            onclick="trackClick('go_to_telegram')"
+          >
+            Оформити замовлення в Telegram
+          </button>
         </div>
       </div>
     </div>

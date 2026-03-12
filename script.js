@@ -27,7 +27,7 @@ const GOOGLE_SHEETS_JSON_URL = "https://script.google.com/macros/s/AKfycbzHOZRRK
  * Telegram group link for the "Order" button.
  * Replace ONLY the part after https://t.me/
  */
-const TELEGRAM_GROUP_URL = "https://t.me/Tsalaiko?text=";
+const TELEGRAM_GROUP_URL = "https://t.me/managergavrik?text=";
 
 // Cached DOM elements
 const productGridEl = document.getElementById("product-grid");
@@ -43,14 +43,30 @@ const flavorListEl = document.getElementById("flavor-list");
 const orderButtonEl = document.getElementById("order-button");
 const modalCloseButtonEl = document.querySelector(".modal-close");
 
+// Cart DOM elements
+const cartButtonEl = document.getElementById("cart-button");
+const cartCountEl = document.getElementById("cart-count");
+const cartOverlayEl = document.getElementById("cart-overlay");
+const cartCloseButtonEl = document.getElementById("cart-close");
+const cartItemsEl = document.getElementById("cart-items");
+const cartTotalValueEl = document.getElementById("cart-total-value");
+const cartCheckoutButtonEl = document.getElementById("cart-checkout");
+
 let currentProduct = null;
 let currentFlavor = null;
+let cart = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   void loadProducts();
   setupModalEvents();
+  setupCartEvents();
 });
 
+function trackClick(name){
+  gtag('event', 'button_click', {
+    button_name: name
+  });
+}
 /**
  * Fetches product rows from Google Sheets and renders the catalog.
  */
@@ -227,7 +243,7 @@ function renderProductGrid(products) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "secondary-button";
-    button.innerHTML = '<span>Більше</span><span class="icon">➜</span>';
+    button.innerHTML = '<span>Більше</span><span class="icon" onclick="trackClick("view_more")">➜</span>';
 
     // Clicking "View flavors" opens the modal for this product
     button.addEventListener("click", (event) => {
@@ -285,6 +301,40 @@ function setupModalEvents() {
       handleOrderClick();
     });
   }
+}
+
+/**
+ * Sets up shared cart event listeners.
+ */
+function setupCartEvents() {
+  if (cartButtonEl) {
+    cartButtonEl.addEventListener("click", () => {
+      openCart();
+    });
+  }
+
+  if (cartCloseButtonEl) {
+    cartCloseButtonEl.addEventListener("click", () => {
+      closeCart();
+    });
+  }
+
+  if (cartOverlayEl) {
+    cartOverlayEl.addEventListener("click", (event) => {
+      if (event.target === cartOverlayEl) {
+        closeCart();
+      }
+    });
+  }
+
+  if (cartCheckoutButtonEl) {
+    cartCheckoutButtonEl.addEventListener("click", () => {
+      handleCartCheckout();
+    });
+  }
+
+  updateCartCount();
+  renderCartItems();
 }
 
 /**
@@ -369,9 +419,221 @@ function updateSelectedFlavorPill(selectedPill) {
 
 /**
  * Handles clicking the "Order" button.
- * Redirects to Telegram. You can extend this to pass product/flavor info.
+ * In current version adds product to cart and opens the cart sidebar.
  */
 function handleOrderClick() {
+  addCurrentProductToCart();
+  closeModal();
+  openCart();
+}
+
+/**
+ * Adds the currently selected product + flavor to the cart.
+ */
+function addCurrentProductToCart() {
+  if (!currentProduct) return;
+
+  const selectedFlavor =
+    currentFlavor ||
+    (currentProduct.flavors && currentProduct.flavors.length
+      ? currentProduct.flavors[0]
+      : "");
+
+  const priceNumber = parsePriceToNumber(currentProduct.price);
+
+  const existing = cart.find(
+    (item) => item.id === currentProduct.id && item.flavor === selectedFlavor
+  );
+
+  if (existing) {
+    existing.quantity += 1;
+  } else {
+    cart.push({
+      id: currentProduct.id,
+      name: currentProduct.name,
+      flavor: selectedFlavor,
+      price: priceNumber,
+      priceLabel: currentProduct.price || "",
+      quantity: 1,
+    });
+  }
+
+  updateCartCount();
+  renderCartItems();
+}
+
+/**
+ * Parses a price string (e.g. "150", "150 EUR") into a number.
+ */
+function parsePriceToNumber(rawPrice) {
+  if (rawPrice == null) return 0;
+  const cleaned = String(rawPrice).replace(/[^\d.,]/g, "").replace(",", ".");
+  const value = parseFloat(cleaned);
+  return Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Updates the counter on the cart button.
+ */
+function updateCartCount() {
+  if (!cartCountEl) return;
+  const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+  cartCountEl.textContent = String(count);
+}
+
+/**
+ * Renders all items inside the cart sidebar.
+ */
+function renderCartItems() {
+  if (!cartItemsEl || !cartTotalValueEl) return;
+
+  cartItemsEl.innerHTML = "";
+
+  if (!cart.length) {
+    const emptyEl = document.createElement("p");
+    emptyEl.textContent = "Корзина порожня.";
+    emptyEl.style.fontSize = "0.9rem";
+    emptyEl.style.color = "#6b7280";
+    cartItemsEl.appendChild(emptyEl);
+    cartTotalValueEl.textContent = "0";
+    return;
+  }
+
+  let total = 0;
+
+  cart.forEach((item, index) => {
+    const itemEl = document.createElement("div");
+    itemEl.className = "cart-item";
+
+    const mainRow = document.createElement("div");
+    mainRow.className = "cart-item-main";
+
+    const textWrapper = document.createElement("div");
+
+    const titleEl = document.createElement("p");
+    titleEl.className = "cart-item-title";
+    titleEl.textContent = item.name;
+
+    textWrapper.appendChild(titleEl);
+
+    if (item.flavor) {
+      const flavorEl = document.createElement("p");
+      flavorEl.className = "cart-item-flavor";
+      flavorEl.textContent = `Смак: ${item.flavor}`;
+      textWrapper.appendChild(flavorEl);
+    }
+
+    const priceEl = document.createElement("div");
+    priceEl.className = "cart-item-price";
+
+    if (item.price > 0) {
+      priceEl.textContent = `${item.price.toFixed(0)} EUR/шт`;
+    } else if (item.priceLabel) {
+      priceEl.textContent = item.priceLabel;
+    } else {
+      priceEl.textContent = "Ціна за запитом";
+    }
+
+    mainRow.appendChild(textWrapper);
+    mainRow.appendChild(priceEl);
+
+    const controlsRow = document.createElement("div");
+    controlsRow.className = "cart-item-controls";
+
+    const quantityControls = document.createElement("div");
+    quantityControls.className = "quantity-controls";
+
+    const minusBtn = document.createElement("button");
+    minusBtn.type = "button";
+    minusBtn.className = "quantity-button";
+    minusBtn.textContent = "-";
+
+    const quantityValue = document.createElement("span");
+    quantityValue.className = "quantity-value";
+    quantityValue.textContent = String(item.quantity);
+
+    const plusBtn = document.createElement("button");
+    plusBtn.type = "button";
+    plusBtn.className = "quantity-button";
+    plusBtn.textContent = "+";
+
+    minusBtn.addEventListener("click", () => {
+      decreaseCartItemQuantity(index);
+    });
+
+    plusBtn.addEventListener("click", () => {
+      increaseCartItemQuantity(index);
+    });
+
+    quantityControls.appendChild(minusBtn);
+    quantityControls.appendChild(quantityValue);
+    quantityControls.appendChild(plusBtn);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove-item-button";
+    removeBtn.textContent = "Видалити";
+
+    removeBtn.addEventListener("click", () => {
+      removeCartItem(index);
+    });
+
+    controlsRow.appendChild(quantityControls);
+    controlsRow.appendChild(removeBtn);
+
+    itemEl.appendChild(mainRow);
+    itemEl.appendChild(controlsRow);
+
+    cartItemsEl.appendChild(itemEl);
+
+    total += item.price * item.quantity;
+  });
+
+  cartTotalValueEl.textContent = total > 0 ? `${total.toFixed(0)} EUR` : "—";
+}
+
+function increaseCartItemQuantity(index) {
+  const item = cart[index];
+  if (!item) return;
+  item.quantity += 1;
+  updateCartCount();
+  renderCartItems();
+}
+
+function decreaseCartItemQuantity(index) {
+  const item = cart[index];
+  if (!item) return;
+  item.quantity -= 1;
+  if (item.quantity <= 0) {
+    cart.splice(index, 1);
+  }
+  updateCartCount();
+  renderCartItems();
+}
+
+function removeCartItem(index) {
+  if (!cart[index]) return;
+  cart.splice(index, 1);
+  updateCartCount();
+  renderCartItems();
+}
+
+function openCart() {
+  if (!cartOverlayEl) return;
+  cartOverlayEl.hidden = false;
+  cartOverlayEl.classList.add("is-open");
+}
+
+function closeCart() {
+  if (!cartOverlayEl) return;
+  cartOverlayEl.classList.remove("is-open");
+  cartOverlayEl.hidden = true;
+}
+
+/**
+ * Sends the current cart content to Telegram as a single order.
+ */
+function handleCartCheckout() {
   if (!TELEGRAM_GROUP_URL || TELEGRAM_GROUP_URL.includes("YOUR_GROUP_LINK")) {
     alert(
       "Please set your Telegram group URL in script.js (TELEGRAM_GROUP_URL)."
@@ -379,28 +641,26 @@ function handleOrderClick() {
     return;
   }
 
-// Формуємо повідомлення для Telegram
-let message = "Привіт! Я хочу замовити ";
+  if (!cart.length) {
+    alert("Корзина порожня. Додайте товари перед оформленням замовлення.");
+    return;
+  }
 
-if (currentProduct) {
-    message += currentProduct.name;
-}
+  let message = "Привіт! Я хочу замовити такі товари:\n";
 
-if (currentFlavor) {
-    message += currentFlavor ? ` зі смаком ${currentFlavor}` : "";
-}
+  cart.forEach((item, index) => {
+    const lineIndex = index + 1;
+    const flavorPart = item.flavor ? ` (смак: ${item.flavor})` : "";
+    const quantityPart = `${item.quantity} шт.`;
 
-message += ".";
+    message += `${lineIndex}) ${item.name}${flavorPart} — ${quantityPart}\n`;
+  });
 
-// Кодуємо текст для URL
-const encodedMessage = encodeURIComponent(message);
+  const encodedMessage = encodeURIComponent(message);
+  const separator = TELEGRAM_GROUP_URL.includes("?") ? "&" : "?";
+  const redirectUrl = `${TELEGRAM_GROUP_URL}${separator}text=${encodedMessage}`;
 
-// Формуємо повне посилання
-const separator = TELEGRAM_GROUP_URL.includes("?") ? "&" : "?";
-const redirectUrl = `${TELEGRAM_GROUP_URL}${separator}text=${encodedMessage}`;
-
-// Переходимо за посиланням
-window.location.href = redirectUrl;
+  window.open(redirectUrl, "_blank");
 }
 
 /**
