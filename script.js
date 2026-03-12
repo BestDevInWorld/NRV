@@ -243,12 +243,13 @@ function renderProductGrid(products) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "secondary-button";
-    button.innerHTML = '<span>Більше</span><span class="icon" onclick="trackClick(\'view_more\')">➜</span>';
+    button.innerHTML = '<span>Більше</span><span class="icon">➜</span>';
 
     // Clicking "View flavors" opens the modal for this product
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       openProductModal(product);
+      trackClick('view_more');
     });
 
     actionsEl.appendChild(button);
