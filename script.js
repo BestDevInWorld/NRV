@@ -27,7 +27,7 @@ const GOOGLE_SHEETS_JSON_URL = "https://script.google.com/macros/s/AKfycbzHOZRRK
  * Telegram group link for the "Order" button.
  * Має бути у форматі https://t.me/username без ?text= в кінці.
  */
-const TELEGRAM_GROUP_URL = "https://t.me/managergavrik";
+const TELEGRAM_GROUP_URL = "https://t.me/managergavrikk";
 
 // Cached DOM elements
 const productGridEl = document.getElementById("product-grid");
